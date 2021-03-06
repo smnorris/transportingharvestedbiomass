@@ -10,10 +10,14 @@ import click
 @click.argument("in_tif", type=click.Path(exists=True))
 @click.argument("out_csv")
 def create_origins(in_tif, out_csv):
-    """Create origins for the routing
+    """
+    Create routing origin points (csv) from input raster (geotiff).
+
+    - any raster format readable by rasterio/gdal should work
+    - coordinates in the output csv will match the CRS of input raster
 
     Arguments:
-    in_tiff -- Path to input harvesting raster (geotiff)
+    in_tiff -- Path to input harvesting raster
     out_csv -- Path to output origins csv (centroid poitns with format (origin_id, biomass, count, x, y)
     """
     # load source image

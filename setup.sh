@@ -29,3 +29,4 @@ conda config --env --set channel_priority strict
 conda install rasterio
 conda install scikit-image
 conda install geopandas
+conda install click
