@@ -27,3 +27,4 @@ conda install rasterio
 conda install scikit-image
 conda install geopandas
 conda install click
+conda install psycopg2
