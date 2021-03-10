@@ -14,17 +14,3 @@ REM ----------------
 psql -p 5434 -U postgres postgres -c "CREATE DATABASE tbh"
 psql -p 5434 -U postgres thb -c "CREATE extension postgis;"
 psql -p 5434 -U postgres thb -c "CREATE extension pgrouting;"
-
-REM ----------------
-REM setup python environment, install dependencies
-REM ----------------
-conda create --n thbenv
-conda activate thbenv
-conda config --env --add channels conda-forge
-conda config --env --set channel_priority strict
-
-conda install rasterio
-conda install scikit-image
-conda install geopandas
-conda install click
-conda install psycopg2
