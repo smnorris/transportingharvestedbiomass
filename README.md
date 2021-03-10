@@ -1,5 +1,7 @@
 # Transporting Harvested Biomass
 
+Estimate transportation distances from forest polygons to selected destinations.
+
 ## Requirements
 
 - Postgresql/PostGIS/PGRouting (tested with v13/3.1/3.1.3)
@@ -12,7 +14,7 @@ Local installation and configuration of the postgresql/postgis/pgrouting databas
 To quickly set up a test database, consider using Docker as outlined in `docker_setup.bat`. Modify the port as needed to avoid conflict with any local postgresql installations.
 
 Installation/setup of the Python and GDAL dependencies is easiest via `conda`.
-Once your database is set up, modify the postgres database connection environment variables in the environment file:
+Once your database is set up, modify the postgres database connection environment variables in `environment.yml`:
 ```
   PGHOST: localhost
   PGUSER: postgres

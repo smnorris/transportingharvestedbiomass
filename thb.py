@@ -4,6 +4,7 @@ import logging
 import sys
 import os
 from urllib.parse import urlparse
+import multiprocessing
 
 import numpy as np
 import rasterio
@@ -12,7 +13,6 @@ import pandas as pd
 import click
 from cligj import verbose_opt, quiet_opt
 import pgdata
-import psycopg2
 
 
 def configure_logging(verbosity):
@@ -31,6 +31,22 @@ def parse_db_url(db_url):
     db["port"] = u.port
     db["password"] = u.password
     return db
+
+
+def execute_parallel(sql, wsg):
+    """Execute sql for specified wsg using a non-pooled, non-parallel conn
+    """
+    # specify multiprocessing when creating to disable connection pooling
+    db = pgdata.connect(multiprocessing=True)
+    conn = db.engine.raw_connection()
+    cur = conn.cursor()
+    # Turn off parallel execution for this connection, because we are
+    # handling the parallelization ourselves
+    cur.execute("SET max_parallel_workers_per_gather = 0")
+    cur.execute(sql, (wsg,))
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 @click.group()
@@ -156,14 +172,19 @@ def create_origins(in_tif, out_csv, verbose, quiet):
 
     # load label ids and centroids into a pandas data frame
     # https://scikit-image.org/docs/dev/api/skimage.measure.html#skimage.measure.regionprops_table
-    df = pd.DataFrame(regionprops_table(img_label, properties=["centroid"]))
+    df = pd.DataFrame(regionprops_table(img_label, properties=["area", "centroid"]))
 
     # convert the cell references to lat/lon
     # https://rasterio.readthedocs.io/en/latest/api/rasterio.transform.html#rasterio.transform.xy
     xs, ys = rasterio.transform.xy(transform, df["centroid-0"], df["centroid-1"])
+
+    # record count of cells per label
+    count = df["area"]
+
+    # note that sum_per_label includes the summary for 0s, remove by stepping up by 1
     coordpairs = zip(
-        sum_per_label[1:], xs, ys
-    )  # note that sum_per_label includes the summary for 0s - remove by stepping up by 1
+        sum_per_label[1:], count, xs, ys
+    )
 
     # dump results to csv
     log.info(f"Writing origin coordinates to {out_csv}")
@@ -172,9 +193,9 @@ def create_origins(in_tif, out_csv, verbose, quiet):
             csvfile, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL
         )
         # header
-        writer.writerow(["origin_id", "biomass", "x", "y"])
+        writer.writerow(["origin_id", "biomass", "count", "x", "y"])
         for i, row in enumerate(coordpairs, start=1):
-            writer.writerow([i, row[0], row[1], row[2]])
+            writer.writerow([i, row[0], row[1], row[2], row[3]])
 
 
 @cli.command()
@@ -266,6 +287,26 @@ def load_destinations(in_csv, db_url):
     )
     db.execute("ALTER TABLE destinations DROP COLUMN x")
     db.execute("ALTER TABLE destinations DROP COLUMN y")
+
+
+@cli.command()
+@click.option(
+    "--db_url",
+    "-db",
+    help="SQLAlchemy database url",
+    default=os.environ.get("DATABASE_URL"),
+)
+@click.option("--out_csv", "-o", help="Path to output csv", default="origin-destination.csv")
+@click.option("--n_proceses", "-n", help="Maximum number of parallel processes", default=1)
+def run_routing(out_csv, db_url, n_processes):
+    """
+    Calculate least-cost routes from orgins to destinations and report on
+    - cost
+    - distance by type
+    Write output to csv
+    """
+    # if we are trying to process in parallel, we want to split the origins up
+    # into reasonable chunks
 
 
 if __name__ == "__main__":
