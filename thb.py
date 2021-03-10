@@ -33,7 +33,7 @@ def parse_db_url(db_url):
     return db
 
 
-def execute_parallel(sql, wsg):
+def execute_parallel(sql, tile):
     """Execute sql for specified wsg using a non-pooled, non-parallel conn
     """
     # specify multiprocessing when creating to disable connection pooling
@@ -43,7 +43,7 @@ def execute_parallel(sql, wsg):
     # Turn off parallel execution for this connection, because we are
     # handling the parallelization ourselves
     cur.execute("SET max_parallel_workers_per_gather = 0")
-    cur.execute(sql, (wsg,))
+    cur.execute(sql, (tile,))
     conn.commit()
     cur.close()
     conn.close()
@@ -243,6 +243,7 @@ def load_origins(in_csv, db_url):
     )
     db.execute("ALTER TABLE origins DROP COLUMN x")
     db.execute("ALTER TABLE origins DROP COLUMN y")
+    db.execute("CREATE INDEX ON origins USING GIST (geom)")
 
 
 @cli.command()
@@ -288,9 +289,12 @@ def load_destinations(in_csv, db_url):
     )
     db.execute("ALTER TABLE destinations DROP COLUMN x")
     db.execute("ALTER TABLE destinations DROP COLUMN y")
+    db.execute("CREATE INDEX ON destinations USING GIST (geom)")
 
 
 @cli.command()
+@verbose_opt
+@quiet_opt
 @click.option(
     "--db_url",
     "-db",
@@ -303,16 +307,33 @@ def load_destinations(in_csv, db_url):
 @click.option(
     "--n_proceses", "-n", help="Maximum number of parallel processes", default=1
 )
-def run_routing(out_csv, db_url, n_processes):
+def run_routing(out_csv, db_url, n_proceses, verbose, quiet):
     """
     Calculate least-cost routes from orgins to destinations and report on
     - cost
     - distance by type
     Write output to csv
     """
-    # if we are trying to process in parallel, we want to split the origins up
-    # into reasonable chunks
+    verbosity = verbose - quiet
+    log_level = max(10, 20 - 10 * verbosity)
+    logging.basicConfig(stream=sys.stderr, level=log_level)
+    log = logging.getLogger(__name__)
 
+    db = pgdata.connect(db_url)
+
+    # create tiles layer if it does not exist
+    if "public.tiles" not in db.tables:
+        log.info("Creating tiles table for parallelization")
+        db.execute(db.queries["create_tiles"])
+
+    # find tiles to process - tiles intersecting origin points
+    tiles = db.execute("""
+        SELECT DISTINCT tile_id
+        FROM tiles t
+        INNER JOIN origins o
+        ON ST_Intersects(t.geom, o.geom)
+    """)
+    log.info([t for t in tiles])
 
 if __name__ == "__main__":
     cli()
