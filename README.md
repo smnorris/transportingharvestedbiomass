@@ -52,10 +52,25 @@ Commands:
 #### `create-network`
 
 Load the roads layer to the database and create the network with pg_routing.
-For example, with the provided .gdb:
+For example, with the provided .gdb, having `objectid` as the existing unique id.
 
     python thb.py create-network data/01_working.gdb Roadnet_only2_1_1splitn_1 objectid
 
+The output table is `network`, with primary key renamed to `network_id`. All other existing fields are retained as is.
+In addtion to an existing unique identifier, the network table must contain these numeric columns (plus the geometries):
+```
+ awater
+ awaterinterp
+ aboat
+ acityspoke
+ aloose
+ aovergrown
+ apaved
+ arough
+ aseasonal
+ aunknown
+ cost
+```
 
 #### `create-origins`
 
@@ -67,7 +82,7 @@ For example, with the provided input geotiff in the /data folder:
 
 #### `load-origins`
 
-Load origins from csv to the database.
+Load origins from csv to table `origins` in the database.
 
 - origins csv must be of format (`origin_id,biomass,count,x,y`) and must include a header
 - origin x/y coordinates must be lon/lat EPSG:4326
@@ -79,7 +94,7 @@ For example, to load the origins file created from the sample geotiff:
 
 #### `load-destinations`
 
-Load (manually crated) destinations from csv to the database.
+Load (manually crated) destinations from csv to table `destinations` in the database.
 
 - destinations csv must be of format (`destination_id,destination_name,x,y`) and must include a header
 - destination x/y coordinates must be lon/lat EPSG:4326
@@ -91,6 +106,6 @@ For example:
 
 #### `run-routing`
 
-Run the routing analysis and dump output Origin-Destination table to csv:
+Find least cost paths for all combinations of records in the `origins` and `destinations` tables, then dump output Origin-Destination table to csv:
 
     python thb.py routing <origins csv> <destinations csv> <output OD csv>

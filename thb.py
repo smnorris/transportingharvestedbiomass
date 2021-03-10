@@ -110,7 +110,7 @@ def create_network(in_file, in_layer, unique_id, db_url, verbose, quiet):
         "-lco",
         "GEOMETRY_NAME=geom",
         "-nln",
-        "roads",
+        "network",
         "-dim",
         "XY",
         "-nlt",
@@ -123,12 +123,15 @@ def create_network(in_file, in_layer, unique_id, db_url, verbose, quiet):
 
     # add pgrouting required source/target columns
     db = pgdata.connect(db_url)
-    db.execute("ALTER TABLE roads ADD COLUMN source integer")
-    db.execute("ALTER TABLE roads ADD COLUMN target integer")
+    db.execute("ALTER TABLE network ADD COLUMN source integer")
+    db.execute("ALTER TABLE network ADD COLUMN target integer")
+
+    # rename pk to network_id just to make things simpler
+    db.execute(f"ALTER TABLE network RENAME COLUMN {unique_id} TO network_id")
 
     # build the network topology - this takes about 11min on my machine
     log.info("Building routing topology")
-    db.execute(f"SELECT pgr_createTopology('roads', 0.000001, 'geom', '{unique_id}')")
+    db.execute(f"SELECT pgr_createTopology('network', 0.000001, 'geom', 'network_id')")
 
 
 @cli.command()
