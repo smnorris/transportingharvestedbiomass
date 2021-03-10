@@ -11,6 +11,6 @@ docker run -d ^
 REM ----------------
 REM setup the database
 REM ----------------
-psql -p 5434 -U postgres postgres -c "CREATE DATABASE tbh"
+psql -p 5434 -U postgres postgres -c "CREATE DATABASE thb"
 psql -p 5434 -U postgres thb -c "CREATE extension postgis;"
 psql -p 5434 -U postgres thb -c "CREATE extension pgrouting;"
