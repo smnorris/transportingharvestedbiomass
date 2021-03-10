@@ -132,8 +132,11 @@ def create_origins(in_tif, out_csv, verbose, quiet):
     out_csv -- Path to output origins csv (centroid poitns with format (origin_id, biomass, count, x, y)
     """
     verbosity = verbose - quiet
-    configure_logging(verbosity)
+    log_level = max(10, 20 - 10 * verbosity)
+    logging.basicConfig(stream=sys.stderr, level=log_level)
+    log = logging.getLogger(__name__)
     # load source image
+    log.info(f"Reading input raster {in_tif}")
     with rasterio.open(in_tif) as src:
         img_source = src.read(1)
         transform = src.transform
@@ -163,6 +166,7 @@ def create_origins(in_tif, out_csv, verbose, quiet):
     )  # note that sum_per_label includes the summary for 0s - remove by stepping up by 1
 
     # dump results to csv
+    log.info(f"Writing origin coordinates to {out_csv}")
     with open(out_csv, "w", newline="") as csvfile:
         writer = csv.writer(
             csvfile, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL

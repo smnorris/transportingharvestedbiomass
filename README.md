@@ -61,18 +61,21 @@ For example, with the provided input geotiff in the /data folder:
     python thb.py create-origins data/
 
 
-#### Load origins and destinations
+#### `load-origins`
 
-Load origins locations from csv to the database:
+Load origins from csv to the database:
 
     python thb.py load-origins <path to origins csv>
 
-Load destination locations from csv to the database:
 
-    python thb.py load-destinations <path to desintations csv>
+#### `load-destinations`
+
+Load (manually crated) destinations from csv to the database:
+
+    python thb.py load-destinations <path to origins csv>
 
 
-#### Run the routing analysis
+#### `run-routing`
 
 Run the routing analysis and dump output Origin-Destination table to csv:
 
