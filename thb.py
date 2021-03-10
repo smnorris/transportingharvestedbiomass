@@ -106,13 +106,13 @@ def create_network(in_file, in_layer, unique_id, db_url, verbose, quiet):
     subprocess.run(command)
 
     # add pgrouting required source/target columns
-    conn = pgdata.connect(db_url)
-    conn.execute("ALTER TABLE roads ADD COLUMN source integer")
-    conn.execute("ALTER TABLE roads ADD COLUMN target integer")
+    db = pgdata.connect(db_url)
+    db.execute("ALTER TABLE roads ADD COLUMN source integer")
+    db.execute("ALTER TABLE roads ADD COLUMN target integer")
 
     # build the network topology - this takes about 11min on my machine
     log.info("Building routing topology")
-    conn.execute(f"SELECT pgr_createTopology('roads', 0.000001, 'geom', '{unique_id}')")
+    db.execute(f"SELECT pgr_createTopology('roads', 0.000001, 'geom', '{unique_id}')")
 
 
 @cli.command()
@@ -177,27 +177,96 @@ def create_origins(in_tif, out_csv, verbose, quiet):
             writer.writerow([i, row[0], row[1], row[2]])
 
 
-"""
-# ----------------
-# load destinations
-"DROP TABLE IF EXISTS destinations"
-"CREATE TABLE destinations (destination_id integer primary key, destination_name text, x double precision, y double precision)"
-"\copy destinations FROM 'data/destinations.csv' delimiter ',' csv header"
-"ALTER TABLE destinations ADD COLUMN geom geometry(Point, 3005)"
-"UPDATE destinations SET geom = ST_Transform(ST_SetSRID(ST_Point(x, y), 4326), 3005)"
-"ALTER TABLE destinations DROP COLUMN x"
-"ALTER TABLE destinations DROP COLUMN y"
+@cli.command()
+@click.option(
+    "--db_url",
+    "-db",
+    help="SQLAlchemy database url",
+    default=os.environ.get("DATABASE_URL"),
+)
+@click.argument("in_csv")
+def load_origins(in_csv, db_url):
+    """
+    Load origins csv to postgres and create geometry.
 
-# ----------------
-# load origins
-"DROP TABLE IF EXISTS origins"
-"CREATE TABLE origins (origin_id integer primary key, biomass double precision, count integer, x double precision, y double precision)"
-"\copy origins FROM 'data/origins.csv' delimiter ',' csv header"
-"ALTER TABLE origins ADD COLUMN geom geometry(Point, 3005)"
-"UPDATE origins SET geom = ST_Transform(ST_SetSRID(ST_Point(x, y), 4326), 3005)"
-"ALTER TABLE origins DROP COLUMN x"
-"ALTER TABLE origins DROP COLUMN y"
-"""
+    Origins csv must be of format: (origin_id,biomass,count,x,y)
+    Coordinates must be lon/lat EPSG:4326
+
+    Arguments:
+    in_csv -- Path to input origins csv
+    """
+    db = pgdata.connect()
+    db.execute("DROP TABLE IF EXISTS origins")
+    db.execute(
+        """
+        CREATE TABLE origins (
+          origin_id integer primary key,
+          biomass double precision,
+          count integer,
+          x double precision,
+          y double precision)
+    """
+    )
+    conn = db.engine.raw_connection()
+    cur = conn.cursor()
+    with open(in_csv, 'r') as f:
+        next(f)                             # Skip the header row.
+        cur.copy_from(f, 'origins', sep=',')
+    conn.commit()
+    cur.close()
+    conn.close()
+    db.execute("ALTER TABLE origins ADD COLUMN geom geometry(Point, 3005)")
+    db.execute(
+        "UPDATE origins SET geom = ST_Transform(ST_SetSRID(ST_Point(x, y), 4326), 3005)"
+    )
+    db.execute("ALTER TABLE origins DROP COLUMN x")
+    db.execute("ALTER TABLE origins DROP COLUMN y")
+
+
+@cli.command()
+@click.option(
+    "--db_url",
+    "-db",
+    help="SQLAlchemy database url",
+    default=os.environ.get("DATABASE_URL"),
+)
+@click.argument("in_csv")
+def load_destinations(in_csv, db_url):
+    """
+    Load destinations csv to postgres and create geometry.
+
+    Destinations csv must be of format: (destination_id,destination_name,x,y)
+    Coordinates must be lon/lat EPSG:4326
+
+    Arguments:
+    in_csv -- Path to input destinations csv
+    """
+    db = pgdata.connect(db_url)
+    db.execute("DROP TABLE IF EXISTS destinations")
+    db.execute(
+        """
+        CREATE TABLE destinations (
+        destination_id integer primary key,
+        destination_name text,
+        x double precision,
+        y double precision)
+    """
+    )
+    conn = db.engine.raw_connection()
+    cur = conn.cursor()
+    with open(in_csv, 'r') as f:
+        next(f)                             # Skip the header row.
+        cur.copy_from(f, 'destinations', sep=',')
+    conn.commit()
+    cur.close()
+    conn.close()
+    db.execute("ALTER TABLE destinations ADD COLUMN geom geometry(Point, 3005)")
+    db.execute(
+        "UPDATE destinations SET geom = ST_Transform(ST_SetSRID(ST_Point(x, y), 4326), 3005)"
+    )
+    db.execute("ALTER TABLE destinations DROP COLUMN x")
+    db.execute("ALTER TABLE destinations DROP COLUMN y")
+
 
 if __name__ == "__main__":
     cli()

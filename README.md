@@ -41,8 +41,10 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  create-network  Load road file/layer to db, create network topology.
-  create-origins  Create origin point csv from input raster.
+  create-network     Load road file/layer to db, create network topology.
+  create-origins     Create origin point csv from input raster.
+  load-destinations  Load destinations csv to postgres and create geometry.
+  load-origins       Load origins csv to postgres and create geometry.
 ```
 
 #### `create-network`
@@ -55,24 +57,34 @@ For example, with the provided .gdb:
 
 #### `create-origins`
 
-Create origin centroids from an input raster (geotiff):
+Create origin centroids from an input raster (geotiff).
 For example, with the provided input geotiff in the /data folder:
 
-    python thb.py create-origins data/
+    python thb.py create-origins data/00_input.tif data/origins.csv
 
 
 #### `load-origins`
 
-Load origins from csv to the database:
+Load origins from csv to the database.
 
-    python thb.py load-origins <path to origins csv>
+- origins csv must be of format (`origin_id,biomass,count,x,y`) and must include a header
+- origin x/y coordinates must be lon/lat EPSG:4326
+
+For example, to load the origins file created from the sample geotiff:
+
+    python thb.py load-origins data/origins.csv
 
 
 #### `load-destinations`
 
-Load (manually crated) destinations from csv to the database:
+Load (manually crated) destinations from csv to the database.
 
-    python thb.py load-destinations <path to origins csv>
+- destinations csv must be of format (`destination_id,destination_name,x,y`) and must include a header
+- destination x/y coordinates must be lon/lat EPSG:4326
+
+For example:
+
+    python thb.py load-destinations data/destinations.csv
 
 
 #### `run-routing`
