@@ -12,17 +12,17 @@ Local installation and configuration of the postgresql/postgis/pgrouting databas
 To quickly set up a test database, consider using Docker as outlined in `docker_setup.bat`. Modify the port as needed to avoid conflict with any local postgresql installations.
 
 Installation/setup of the Python and GDAL dependencies is easiest via `conda`.
-Once your database is set up, edit the postgresql connection environment varialbles in `environment.yml` as required:
+Once your database is set up, modify the postgres database connection environment variables in the environment file:
 ```
   PGHOST: localhost
   PGUSER: postgres
   PGPORT: 5434
   PGDATABASE: thb
-  PGOGR: 'host=localhost user=postgres dbname=thb password=postgres port=5434'
+  DATABASE_URL: postgresql://postgres@localhost:5434/thb
 ```
-The provided default parameters match the connection parameters for the db created in the Docker script (port mapped to 5434 to avoid collision with any local db at the usual 5432)
+The provided default parameters match the connection parameters for the db created in the Docker script (the port is mapped to `5434` to avoid collision with any local db at the usual `5432`)
 
-Once your environment variables are set in `environment.yml`, create and activate the environment:
+Once your environment variables are set, create and activate the environment:
 
 ```
 conda env create -f environment.yml
@@ -31,18 +31,34 @@ conda activate thbenv
 
 ## Processing
 
-#### Create the network
+A single script `thb.py` is provided, with a seperate command for each part of the job:
 
-Load your roads layer to the database and create the network with pg_routing:
+```
+(thbenv) python thb.py --help
+Usage: thb.py [OPTIONS] COMMAND [ARGS]...
 
-    python thb.py create-network <path to in network layer>
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  create-network  Load road file/layer to db, create network topology.
+  create-origins  Create origin point csv from input raster.
+```
+
+#### `create-network`
+
+Load the roads layer to the database and create the network with pg_routing.
+For example, with the provided .gdb:
+
+    python thb.py create-network data/01_working.gdb Roadnet_only2_1_1splitn_1 objectid
 
 
-#### Create origin points (cutblock centroids)
+#### `create-origins`
 
-Create origin centroids from an input raster (a geotiff or any gdal supported raster):
+Create origin centroids from an input raster (geotiff):
+For example, with the provided input geotiff in the /data folder:
 
-    python thb.py create-origins <path to input raster> <output centroids csv>
+    python thb.py create-origins data/
 
 
 #### Load origins and destinations

@@ -1,17 +1,128 @@
+import subprocess
 import csv
+import logging
+import sys
+import os
+from urllib.parse import urlparse
+
 import numpy as np
 import rasterio
 from skimage.measure import label, regionprops_table
 import pandas as pd
 import click
+from cligj import verbose_opt, quiet_opt
+import pgdata
+import psycopg2
 
 
-@click.command()
+def configure_logging(verbosity):
+    log_level = max(10, 30 - 10 * verbosity)
+    logging.basicConfig(stream=sys.stderr, level=log_level)
+
+
+def parse_db_url(db_url):
+    """provided a db url, return a dict with connection properties
+    """
+    u = urlparse(db_url)
+    db = {}
+    db["database"] = u.path[1:]
+    db["user"] = u.username
+    db["host"] = u.hostname
+    db["port"] = u.port
+    db["password"] = u.password
+    return db
+
+
+@click.group()
+def cli():
+    pass
+
+
+@cli.command()
+@verbose_opt
+@quiet_opt
+@click.option(
+    "--db_url",
+    "-db",
+    help="SQLAlchemy database url",
+    default=os.environ.get("DATABASE_URL"),
+)
+@click.argument("in_file")
+@click.argument("in_layer")
+@click.argument("unique_id")
+def create_network(in_file, in_layer, unique_id, db_url, verbose, quiet):
+    """
+    Load road file/layer to db, create network topology.
+
+    Arguments:
+    in_file  -- Path to input shape / .gdb folder or gpkg file
+    in_layer -- Name of input shapefile / geodatabase-geopackage layer
+    uniqe_id -- Name of unique identifer column in input layer
+    db_url   -- See options above
+
+    **NOTE**
+
+    This is expected to work for the provided roads data only. If loading
+    multiple layers to your network or loading to a different table, it is
+    likely better to do the load in a separate custom set of ogr commands.
+    """
+
+    # for this command, default to INFO level logging
+    # (echo the ogr2ogr commands by default)
+    verbosity = verbose - quiet
+    log_level = max(10, 20 - 10 * verbosity)
+    logging.basicConfig(stream=sys.stderr, level=log_level)
+    log = logging.getLogger(__name__)
+
+    db = parse_db_url(db_url)
+    click.echo(db_url)
+    db_string = "PG:host={h} user={u} dbname={db} port={port}".format(
+        h=db["host"], u=db["user"], db=db["database"], port=db["port"],
+    )
+    if db["password"]:
+        db_string = db_string + " password={pwd}".format(pwd=db["password"])
+    log = logging.getLogger(__name__)
+    command = [
+        "ogr2ogr",
+        "-t_srs",
+        "EPSG:3005",
+        "-f",
+        "PostgreSQL",
+        db_string,
+        "-lco",
+        "OVERWRITE=YES",
+        "-lco",
+        "GEOMETRY_NAME=geom",
+        "-nln",
+        "roads",
+        "-dim",
+        "XY",
+        "-nlt",
+        "LINESTRING",
+        in_file,
+        in_layer,
+    ]
+    log.info(" ".join(command))
+    subprocess.run(command)
+
+    # add pgrouting required source/target columns
+    conn = pgdata.connect(db_url)
+    conn.execute("ALTER TABLE roads ADD COLUMN source integer")
+    conn.execute("ALTER TABLE roads ADD COLUMN target integer")
+
+    # build the network topology - this takes about 11min on my machine
+    log.info("Building routing topology")
+    conn.execute(f"SELECT pgr_createTopology('roads', 0.000001, 'geom', '{unique_id}')")
+
+
+@cli.command()
+@verbose_opt
+@quiet_opt
 @click.argument("in_tif", type=click.Path(exists=True))
 @click.argument("out_csv")
-def create_origins(in_tif, out_csv):
+def create_origins(in_tif, out_csv, verbose, quiet):
     """
-    Create routing origin points (csv) from input raster (geotiff).
+    Create origin point csv from input raster.
 
     - any raster format readable by rasterio/gdal should work
     - coordinates in the output csv will match the CRS of input raster
@@ -20,6 +131,8 @@ def create_origins(in_tif, out_csv):
     in_tiff -- Path to input harvesting raster
     out_csv -- Path to output origins csv (centroid poitns with format (origin_id, biomass, count, x, y)
     """
+    verbosity = verbose - quiet
+    configure_logging(verbosity)
     # load source image
     with rasterio.open(in_tif) as src:
         img_source = src.read(1)
@@ -60,5 +173,27 @@ def create_origins(in_tif, out_csv):
             writer.writerow([i, row[0], row[1], row[2]])
 
 
+"""
+# ----------------
+# load destinations
+"DROP TABLE IF EXISTS destinations"
+"CREATE TABLE destinations (destination_id integer primary key, destination_name text, x double precision, y double precision)"
+"\copy destinations FROM 'data/destinations.csv' delimiter ',' csv header"
+"ALTER TABLE destinations ADD COLUMN geom geometry(Point, 3005)"
+"UPDATE destinations SET geom = ST_Transform(ST_SetSRID(ST_Point(x, y), 4326), 3005)"
+"ALTER TABLE destinations DROP COLUMN x"
+"ALTER TABLE destinations DROP COLUMN y"
+
+# ----------------
+# load origins
+"DROP TABLE IF EXISTS origins"
+"CREATE TABLE origins (origin_id integer primary key, biomass double precision, count integer, x double precision, y double precision)"
+"\copy origins FROM 'data/origins.csv' delimiter ',' csv header"
+"ALTER TABLE origins ADD COLUMN geom geometry(Point, 3005)"
+"UPDATE origins SET geom = ST_Transform(ST_SetSRID(ST_Point(x, y), 4326), 3005)"
+"ALTER TABLE origins DROP COLUMN x"
+"ALTER TABLE origins DROP COLUMN y"
+"""
+
 if __name__ == "__main__":
-    create_origins()
+    cli()

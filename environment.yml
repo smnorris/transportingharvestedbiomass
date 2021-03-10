@@ -15,4 +15,4 @@ variables:
   PGUSER: postgres
   PGPORT: 5434
   PGDATABASE: thb
-  PGOGR: 'host=localhost user=postgres dbname=thb password=postgres port=5434'
+  DATABASE_URL: postgresql://postgres@localhost:5434/thb
