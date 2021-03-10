@@ -182,9 +182,7 @@ def create_origins(in_tif, out_csv, verbose, quiet):
     count = df["area"]
 
     # note that sum_per_label includes the summary for 0s, remove by stepping up by 1
-    coordpairs = zip(
-        sum_per_label[1:], count, xs, ys
-    )
+    coordpairs = zip(sum_per_label[1:], count, xs, ys)
 
     # dump results to csv
     log.info(f"Writing origin coordinates to {out_csv}")
@@ -230,9 +228,9 @@ def load_origins(in_csv, db_url):
     )
     conn = db.engine.raw_connection()
     cur = conn.cursor()
-    with open(in_csv, 'r') as f:
-        next(f)                             # Skip the header row.
-        cur.copy_from(f, 'origins', sep=',')
+    with open(in_csv, "r") as f:
+        next(f)  # Skip the header row.
+        cur.copy_from(f, "origins", sep=",")
     conn.commit()
     cur.close()
     conn.close()
@@ -275,9 +273,9 @@ def load_destinations(in_csv, db_url):
     )
     conn = db.engine.raw_connection()
     cur = conn.cursor()
-    with open(in_csv, 'r') as f:
-        next(f)                             # Skip the header row.
-        cur.copy_from(f, 'destinations', sep=',')
+    with open(in_csv, "r") as f:
+        next(f)  # Skip the header row.
+        cur.copy_from(f, "destinations", sep=",")
     conn.commit()
     cur.close()
     conn.close()
@@ -296,8 +294,12 @@ def load_destinations(in_csv, db_url):
     help="SQLAlchemy database url",
     default=os.environ.get("DATABASE_URL"),
 )
-@click.option("--out_csv", "-o", help="Path to output csv", default="origin-destination.csv")
-@click.option("--n_proceses", "-n", help="Maximum number of parallel processes", default=1)
+@click.option(
+    "--out_csv", "-o", help="Path to output csv", default="origin-destination.csv"
+)
+@click.option(
+    "--n_proceses", "-n", help="Maximum number of parallel processes", default=1
+)
 def run_routing(out_csv, db_url, n_processes):
     """
     Calculate least-cost routes from orgins to destinations and report on
