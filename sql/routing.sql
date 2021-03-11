@@ -84,8 +84,8 @@ INSERT INTO origin_destination_cost_matrix (
   total_aboat
 )
 SELECT
-  o.node AS origin_node_id,
-  d.node AS destination_node_id,
+  c.origin_node_id,
+  c.destination_node_id,
   ROUND(SUM(x.cost)::numeric, 2) AS total_cost,
   ROUND(SUM(ST_Length(n.geom))::numeric, 2) as total_length,
   ROUND(SUM(n.apaved)::numeric, 2) AS total_apaved,
@@ -101,15 +101,14 @@ SELECT
 FROM
   pgr_Dijkstra(
     'SELECT network_id as id, source, target, cost FROM network',
-    (SELECT array_agg(origin_node_id) FROM (SELECT DISTINCT origin_node_id FROM not_already_computed) AS f),
-    (SELECT array_agg(destination_node_id) FROM (SELECT DISTINCT destination_node_id FROM not_already_computed) AS b),
+    (SELECT array_agg(origin_node_id) FROM (SELECT DISTINCT origin_node_id FROM combinations) AS f),
+    (SELECT array_agg(destination_node_id) FROM (SELECT DISTINCT destination_node_id FROM combinations) AS b),
     FALSE
 ) x
 INNER JOIN network n ON x.edge = n.network_id
-INNER JOIN destinations d ON x.end_vid = d.node
-INNER JOIN origins o ON x.start_vid = o.node
-GROUP BY o.node, d.node
-ORDER BY o.node, SUM(x.cost)
+INNER JOIN combinations c ON x.end_vid = c.destination_node_id AND x.start_vid = c.origin_node_id
+GROUP BY c.origin_node_id, c.destination_node_id
+ORDER BY c.origin_node_id, SUM(x.cost)
 -- conflicts are possible because of parallel processing - an origin can be present in > 1 tile,
 -- and not_already_computed above may be calculated before an adjacent tile is complete
 ON CONFLICT DO NOTHING;
