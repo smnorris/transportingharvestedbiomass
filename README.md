@@ -141,3 +141,31 @@ Notes:
 2. In the db, the tool creates and populates the table `origin_destinations_cost_matrix`. This table records the cost/length of travel between given nodes in the network. Once calculated for a given road segment, these costs do not have to be recaluclated on each run of the tool and subseqeunt runs of the tool with similar inputs should be faster.
 
 3. A general progress bar is displayed during routing to indicate the work is continuing. Because the progress bar iterates over the internal tiles rather than the individual origins (and number of points per tile will vary widely), the time indicated may not provide a good guide to completion time.
+
+## QA Summary
+
+Scripts in `qa` were used to check against provided results from ArcGIS.
+(Note that `qa.sh` is a bash script and has some dependencies not included in the conda environment)
+
+
+### Comparison of scikit-image/numpy centroids to ArcGIS centroids
+
+For the provided data, data assoicated with all origins (sum of pixels, biomass) is exactly the same for all 744 locations. Centroid locations differ slightly. This table summarizes the distance between centroids for the same cutblock between the two sources, where the maximum difference was 583m.
+
+
+| distance | count |
+| -------- |:-----:|
+| 0-1m     | 338 |
+| 1-10m    | 209 |
+| 10-25m   | 41  |
+| 25-50m   | 44  |
+| 50-75m   | 40  |
+| 75-100m  | 17  |
+| >= 100m  | 55  |
+
+### Comparisons of cost/distance matrix outputs
+
+With rail and water transportation linkages not included this is difficult to compare directly.
+However, where routes are comparable the costs/distance are very similar (ranks are equivalent unless a major water corridor is missing, costs are generally within .10 and distances are within several hundred metres).
+
+See the [summary csv](qa/output_comparison.csv) to review the exact differences.
