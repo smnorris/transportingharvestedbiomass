@@ -19,7 +19,7 @@ WITH origins AS
    ORDER BY n.geom <-> o.geom
    LIMIT 1
  ) as nn
- WHERE t.tile_id = :tile
+ WHERE t.tile_id = %s
 ),
 
 destinations AS

@@ -5,6 +5,8 @@ import sys
 import os
 from urllib.parse import urlparse
 import multiprocessing
+from pathlib import Path
+from functools import partial
 
 import numpy as np
 import rasterio
@@ -12,6 +14,7 @@ from skimage.measure import label, regionprops_table
 import pandas as pd
 import click
 from cligj import verbose_opt, quiet_opt
+from psycopg2 import sql
 import pgdata
 
 
@@ -305,9 +308,9 @@ def load_destinations(in_csv, db_url):
     "--out_csv", "-o", help="Path to output csv", default="origin-destination.csv"
 )
 @click.option(
-    "--n_proceses", "-n", help="Maximum number of parallel processes", default=1
+    "--n_processes", "-n", help="Maximum number of parallel processes", default=1
 )
-def run_routing(out_csv, db_url, n_proceses, verbose, quiet):
+def run_routing(out_csv, db_url, n_processes, verbose, quiet):
     """
     Calculate least-cost routes from orgins to destinations and report on
     - cost
@@ -326,14 +329,40 @@ def run_routing(out_csv, db_url, n_proceses, verbose, quiet):
         log.info("Creating tiles table for parallelization")
         db.execute(db.queries["create_tiles"])
 
+    # create output table if it does not exist
+    if "public.origin_destination_cost_matrix" not in db.tables:
+        log.info("Creating output origin-destination cost matrix table")
+        db.execute(db.queries["create_origin_destination_cost_matrix"])
+
     # find tiles to process - tiles intersecting origin points
-    tiles = db.execute("""
+    tiles = sorted(
+        [
+            t[0]
+            for t in db.query(
+                """
         SELECT DISTINCT tile_id
         FROM tiles t
         INNER JOIN origins o
         ON ST_Intersects(t.geom, o.geom)
-    """)
-    log.info([t for t in tiles])
+    """
+            )
+        ]
+    )
+    # test with these two
+    tiles = [3931, 3930]
+    n = len(tiles)
+    log.info(f"Processing {n} tiles")
+
+    # load query, do this properly with psycopg2 rather than using pgdata
+    query = sql.SQL(Path(Path.cwd() / "sql" / "routing.sql").read_text())
+
+    # process each tile in parallel
+    func = partial(execute_parallel, query)
+    pool = multiprocessing.Pool(processes=n_processes)
+    pool.map(func, tiles)
+    pool.close()
+    pool.join()
+
 
 if __name__ == "__main__":
     cli()
