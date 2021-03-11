@@ -47,7 +47,29 @@ Commands:
   create-origins     Create origin point csv from input raster.
   load-destinations  Load destinations csv to postgres and create geometry.
   load-origins       Load origins csv to postgres and create geometry.
+  run-routing        Calculate least-cost routes from orgins to
+                     destinations...
 ```
+
+Usage help is available for each command, for example:
+
+```
+(thbenv) python thb.py run-routing --help
+Usage: thb.py run-routing [OPTIONS]
+
+  Calculate least-cost routes from orgins to destinations and report on -
+  cost - distance by type Write output to csv
+
+Options:
+  -v, --verbose              Increase verbosity.
+  -q, --quiet                Decrease verbosity.
+  -db, --db_url TEXT         SQLAlchemy database url
+  -o, --out_csv TEXT         Path to output csv
+  -n, --n_processes INTEGER  Maximum number of parallel processes
+  --help                     Show this message and exit.
+```
+
+
 
 #### `create-network`
 
@@ -111,3 +133,9 @@ Find least cost paths for all combinations of records in the `origins` and `dest
 For example:
 
     python thb.py run-routing -n 10 -o my_output_file.csv
+
+Notes:
+
+1. In the db, the tool creates and populates the table `origin_destinations_cost_matrix`. This table records the cost/length of travel between given nodes in the network. Once calculated for a given road segment, these costs do not have to be recaluclated on each run of the tool and subseqeunt runs of the tool with similar inputs should be faster.
+
+2. A general progress bar is provided to indicate the work is continuing. Because the progress bar iterates over the internal tiles rather than the individual origins (and number of points per tile will vary widely), the time indicated may not provide a good guide to completion time.

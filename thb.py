@@ -304,18 +304,12 @@ def load_destinations(in_csv, db_url):
     help="SQLAlchemy database url",
     default=os.environ.get("DATABASE_URL"),
 )
-@click.option(
-    "--out_csv", "-o", help="Path to output csv", default="cost_matrix.csv"
-)
+@click.option("--out_csv", "-o", help="Path to output csv", default="cost_matrix.csv")
 @click.option(
     "--n_processes", "-n", help="Maximum number of parallel processes", default=1
 )
 def run_routing(out_csv, db_url, n_processes, verbose, quiet):
-    """
-    Calculate least-cost routes from orgins to destinations and report on
-    - cost
-    - distance by type
-    Write output to csv
+    """Calculate origin-destination cost matrix and write output to csv.
     """
     verbosity = verbose - quiet
     log_level = max(10, 20 - 10 * verbosity)
@@ -344,7 +338,6 @@ def run_routing(out_csv, db_url, n_processes, verbose, quiet):
         FROM tiles t
         INNER JOIN origins o
         ON ST_Intersects(t.geom, o.geom)
-        --LIMIT 50 --test limit
     """
             )
         ]
@@ -358,7 +351,6 @@ def run_routing(out_csv, db_url, n_processes, verbose, quiet):
     # process each tile in parallel
     func = partial(execute_parallel, query)
     pool = multiprocessing.Pool(processes=n_processes)
-    #pool.map(func, tiles)
     # add a progress bar
     results_iter = pool.imap_unordered(func, tiles)
     with click.progressbar(results_iter, length=len(tiles)) as bar:
@@ -373,7 +365,7 @@ def run_routing(out_csv, db_url, n_processes, verbose, quiet):
     query_csv = f"COPY ({query_text}) TO STDOUT WITH CSV HEADER"
     conn = db.engine.raw_connection()
     cur = conn.cursor()
-    with open(out_csv, 'w') as f:
+    with open(out_csv, "w") as f:
         cur.copy_expert(query_csv, f)
     conn.close()
 
