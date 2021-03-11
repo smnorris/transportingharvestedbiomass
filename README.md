@@ -4,7 +4,7 @@ Estimate transportation distances from forest polygons to selected destinations.
 
 ## Requirements
 
-- Postgresql/PostGIS/PGRouting (tested with v13/3.1/3.1.3)
+- Postgresql/PostGIS/PGRouting (v13/3.1/3.1.3)
 - Python>=3.6
 - Docker (optional, for easy installation of a test database)
 
