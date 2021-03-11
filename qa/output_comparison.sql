@@ -16,6 +16,11 @@ WITH cm_arc AS
     FROM cost_matrix_arc a
     INNER JOIN origins_arc b
     ON a."OriginID" = b."znsums_Value"
+    WHERE
+      "Total_Aboat" = 0 AND
+      "Total_Awater" = 0 AND
+      "Total_AwaterInterp" = 0 AND
+      "Total_Arail" = 0
 ),
 
 cm_pg AS
@@ -69,10 +74,9 @@ LEFT OUTER JOIN cm_pg as pg
 ON lut.origin_id_pg = pg.origin_id
 AND arc.destination_id = pg.destination_id
 ORDER BY arc.origin_id, arc.destination_id
-)
+),
 
 -- what are the differences?
-
 SELECT
  origin_id_pg,
  destination_id,
@@ -80,4 +84,5 @@ SELECT
  destination_rank_arc - destination_rank_pg  as rank_diff,
  total_cost_arc - total_cost_pg as cost_diff,
  total_length_arc - total_length_pg as length_diff
-FROM data;
+FROM data
+

@@ -152,7 +152,6 @@ Scripts in `qa` were used to check against provided results from ArcGIS.
 
 For the provided data, data assoicated with all origins (sum of pixels, biomass) is exactly the same for all 744 locations. Centroid locations differ slightly. This table summarizes the distance between centroids for the same cutblock between the two sources, where the maximum difference was 583m.
 
-
 | distance | count |
 | -------- |:-----:|
 | 0-1m     | 338 |
@@ -165,7 +164,13 @@ For the provided data, data assoicated with all origins (sum of pixels, biomass)
 
 ### Comparisons of cost/distance matrix outputs
 
-With rail and water transportation linkages not included this is difficult to compare directly.
-However, where routes are comparable the costs/distance are very similar (ranks are equivalent unless a major water corridor is missing, costs are generally within .10 and distances are within several hundred metres).
+Because the networks are not identical (no rail or water in the version used in postgis), not all records are comparable.
+However, we can compare all output routes that did not include rail/water in the arc analysis:
 
-See the [summary csv](qa/output_comparison.csv) to review the exact differences.
+- 253 rows have a different output destination rank (of 1), mostly when comparing McMahon Gas Plant with Kamloops or Quesnel.
+- the average total cost difference between the two methods is $.00867
+- the average total distance difference between the two methods is 125m
+
+Some of the difference can likely be attributed to the shift in centroid locations, but it is difficult to determine what other sources may contribute to these differences.
+
+See the [summary csv](qa/output_comparison.csv) to review the exact differences in the sample data (for routes that did not include rail/water in the ArcGIS version)
