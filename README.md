@@ -130,12 +130,14 @@ For example:
 
 Find least cost paths for all combinations of records in the `origins` and `destinations` tables, then dump output Origin-Destination cost matrix to csv:
 
-For example:
+For example, running on up to 10 cores and outputing to `my_output_file.csv`:
 
     python thb.py run-routing -n 10 -o my_output_file.csv
 
 Notes:
 
-1. In the db, the tool creates and populates the table `origin_destinations_cost_matrix`. This table records the cost/length of travel between given nodes in the network. Once calculated for a given road segment, these costs do not have to be recaluclated on each run of the tool and subseqeunt runs of the tool with similar inputs should be faster.
+1. For more detailed usage for each command, see the help.
 
-2. A general progress bar is provided to indicate the work is continuing. Because the progress bar iterates over the internal tiles rather than the individual origins (and number of points per tile will vary widely), the time indicated may not provide a good guide to completion time.
+2. In the db, the tool creates and populates the table `origin_destinations_cost_matrix`. This table records the cost/length of travel between given nodes in the network. Once calculated for a given road segment, these costs do not have to be recaluclated on each run of the tool and subseqeunt runs of the tool with similar inputs should be faster.
+
+3. A general progress bar is displayed during routing to indicate the work is continuing. Because the progress bar iterates over the internal tiles rather than the individual origins (and number of points per tile will vary widely), the time indicated may not provide a good guide to completion time.
