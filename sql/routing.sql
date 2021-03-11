@@ -109,4 +109,7 @@ INNER JOIN network n ON x.edge = n.network_id
 INNER JOIN destinations d ON x.end_vid = d.node
 INNER JOIN origins o ON x.start_vid = o.node
 GROUP BY o.node, d.node
-ORDER BY o.node, SUM(x.cost);
+ORDER BY o.node, SUM(x.cost)
+-- conflicts are possible because of parallel processing - an origin can be present in > 1 tile,
+-- and not_already_computed above may be calculated before an adjacent tile is complete
+ON CONFLICT DO NOTHING;

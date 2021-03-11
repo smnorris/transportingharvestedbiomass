@@ -344,12 +344,11 @@ def run_routing(out_csv, db_url, n_processes, verbose, quiet):
         FROM tiles t
         INNER JOIN origins o
         ON ST_Intersects(t.geom, o.geom)
+        --LIMIT 50 --test limit
     """
             )
         ]
     )
-    # test with these two
-    tiles = [3931, 3930]
     n = len(tiles)
     log.info(f"Processing {n} tiles")
 
@@ -359,7 +358,12 @@ def run_routing(out_csv, db_url, n_processes, verbose, quiet):
     # process each tile in parallel
     func = partial(execute_parallel, query)
     pool = multiprocessing.Pool(processes=n_processes)
-    pool.map(func, tiles)
+    #pool.map(func, tiles)
+    # add a progress bar
+    results_iter = pool.imap_unordered(func, tiles)
+    with click.progressbar(results_iter, length=len(tiles)) as bar:
+        for _ in bar:
+            pass
     pool.close()
     pool.join()
 
