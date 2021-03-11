@@ -106,6 +106,8 @@ For example:
 
 #### `run-routing`
 
-Find least cost paths for all combinations of records in the `origins` and `destinations` tables, then dump output Origin-Destination table to csv:
+Find least cost paths for all combinations of records in the `origins` and `destinations` tables, then dump output Origin-Destination cost matrix to csv:
 
-    python thb.py routing <origins csv> <destinations csv> <output OD csv>
+For example:
+
+    python htb.py run-routing -n 10 -o my_output_file.csv
