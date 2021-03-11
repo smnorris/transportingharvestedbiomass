@@ -305,7 +305,7 @@ def load_destinations(in_csv, db_url):
     default=os.environ.get("DATABASE_URL"),
 )
 @click.option(
-    "--out_csv", "-o", help="Path to output csv", default="origin-destination.csv"
+    "--out_csv", "-o", help="Path to output csv", default="cost_matrix.csv"
 )
 @click.option(
     "--n_processes", "-n", help="Maximum number of parallel processes", default=1
@@ -362,6 +362,16 @@ def run_routing(out_csv, db_url, n_processes, verbose, quiet):
     pool.map(func, tiles)
     pool.close()
     pool.join()
+
+    # dump to csv
+    log.info(f"Dumping results to file {out_csv}")
+    query_text = Path(Path.cwd() / "sql" / "report.sql").read_text()
+    query_csv = f"COPY ({query_text}) TO STDOUT WITH CSV HEADER"
+    conn = db.engine.raw_connection()
+    cur = conn.cursor()
+    with open(out_csv, 'w') as f:
+        cur.copy_expert(query_csv, f)
+    conn.close()
 
 
 if __name__ == "__main__":
