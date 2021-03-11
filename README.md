@@ -110,4 +110,4 @@ Find least cost paths for all combinations of records in the `origins` and `dest
 
 For example:
 
-    python htb.py run-routing -n 10 -o my_output_file.csv
+    python thb.py run-routing -n 10 -o my_output_file.csv
