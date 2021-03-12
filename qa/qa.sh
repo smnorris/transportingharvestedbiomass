@@ -64,6 +64,5 @@ csvsql --db postgresql://postgres@localhost:5434/thb --table cost_matrix_arc --i
 # compare the centroid coordinates in the two origin files
 psql2csv < origin_centroid_comparison.sql > origin_centroid_comparison.csv
 
-# compare the two cost matrix outputs
-# this is more problematic because of the different networks (no water or rail currently included in thb network)
+# compare the two cost matrix outputs where no rail or water transport occured in the arc version
 psql2csv < output_comparison.sql > output_comparison.csv
