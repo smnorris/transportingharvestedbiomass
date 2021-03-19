@@ -15,6 +15,7 @@ import pandas as pd
 import click
 from cligj import verbose_opt, quiet_opt
 from psycopg2 import sql
+from psycopg2 import extras
 import pgdata
 
 
@@ -36,8 +37,8 @@ def parse_db_url(db_url):
     return db
 
 
-def execute_parallel(sql, tile):
-    """Execute sql for specified wsg using a non-pooled, non-parallel conn
+def batched_routing_query(sql, chunk):
+    """Execute sql for specified chunk of records using a non-pooled connection
     """
     # specify multiprocessing when creating to disable connection pooling
     db = pgdata.connect(multiprocessing=True)
@@ -46,95 +47,37 @@ def execute_parallel(sql, tile):
     # Turn off parallel execution for this connection, because we are
     # handling the parallelization ourselves
     cur.execute("SET max_parallel_workers_per_gather = 0")
-    cur.execute(sql, (tile,))
-    conn.commit()
+    # find o-d pairs to process
+    cur.execute("SELECT origin_node_id, destination_node_id FROM temp_origin_destinations WHERE chunk = %s", (chunk,))
+    od_pairs = cur.fetchall()
+    results = []
+    for od in od_pairs:
+        results.append(cur.execute(sql, (od[0], od[1])))
+    print(results)
     cur.close()
     conn.close()
+
+
+def add_nearest_node(in_table, id):
+    """add the id of the nearest network node to the input table
+    """
+    db = pgdata.connect()
+    db.execute(f"ALTER TABLE {in_table} ADD COLUMN IF NOT EXISTS node_id integer")
+    query = sql.SQL(Path(Path.cwd() / "sql" / "nearest_node.sql").read_text()).format(
+        in_table=sql.Identifier(in_table),
+        id=sql.Identifier(id)
+    )
+    conn = db.engine.raw_connection()
+    cur = conn.cursor()
+    cur.execute(query)
+    conn.commit()
+    conn.close()
+    db.execute(f"CREATE INDEX ON {in_table} (node_id)")
 
 
 @click.group()
 def cli():
     pass
-
-
-@cli.command()
-@verbose_opt
-@quiet_opt
-@click.option(
-    "--db_url",
-    "-db",
-    help="SQLAlchemy database url",
-    default=os.environ.get("DATABASE_URL"),
-)
-@click.argument("in_file")
-@click.argument("in_layer")
-@click.argument("unique_id")
-def create_network(in_file, in_layer, unique_id, db_url, verbose, quiet):
-    """
-    Load road file/layer to db, create network topology.
-
-    Arguments:
-    in_file  -- Path to input shape / .gdb folder or gpkg file
-    in_layer -- Name of input shapefile / geodatabase-geopackage layer
-    uniqe_id -- Name of unique identifer column in input layer
-    db_url   -- See options above
-
-    **NOTE**
-
-    This is expected to work for the provided roads data only. If loading
-    multiple layers to your network or loading to a different table, it is
-    likely better to do the load in a separate custom set of ogr commands.
-    """
-
-    # for this command, default to INFO level logging
-    # (echo the ogr2ogr commands by default)
-    verbosity = verbose - quiet
-    log_level = max(10, 20 - 10 * verbosity)
-    logging.basicConfig(stream=sys.stderr, level=log_level)
-    log = logging.getLogger(__name__)
-
-    db = parse_db_url(db_url)
-    click.echo(db_url)
-    db_string = "PG:host={h} user={u} dbname={db} port={port}".format(
-        h=db["host"], u=db["user"], db=db["database"], port=db["port"],
-    )
-    if db["password"]:
-        db_string = db_string + " password={pwd}".format(pwd=db["password"])
-    log = logging.getLogger(__name__)
-    command = [
-        "ogr2ogr",
-        "-t_srs",
-        "EPSG:3005",
-        "-f",
-        "PostgreSQL",
-        db_string,
-        "-lco",
-        "OVERWRITE=YES",
-        "-lco",
-        "GEOMETRY_NAME=geom",
-        "-nln",
-        "network",
-        "-dim",
-        "XY",
-        "-nlt",
-        "LINESTRING",
-        in_file,
-        in_layer,
-    ]
-    log.info(" ".join(command))
-    subprocess.run(command)
-
-    # add pgrouting required source/target columns
-    db = pgdata.connect(db_url)
-    db.execute("ALTER TABLE network ADD COLUMN source integer")
-    db.execute("ALTER TABLE network ADD COLUMN target integer")
-
-    # rename pk to network_id just to make things simpler
-    db.execute(f"ALTER TABLE network RENAME COLUMN {unique_id} TO network_id")
-
-    # build the network topology - this takes about 11min on my machine
-    log.info("Building routing topology")
-    db.execute(f"SELECT pgr_createTopology('network', 0.000001, 'geom', 'network_id')")
 
 
 @cli.command()
@@ -248,6 +191,9 @@ def load_origins(in_csv, db_url):
     db.execute("ALTER TABLE origins DROP COLUMN y")
     db.execute("CREATE INDEX ON origins USING GIST (geom)")
 
+    # add the id of the nearest network node to the table
+    add_nearest_node("origins", "origin_id")
+
 
 @cli.command()
 @click.option(
@@ -294,6 +240,9 @@ def load_destinations(in_csv, db_url):
     db.execute("ALTER TABLE destinations DROP COLUMN y")
     db.execute("CREATE INDEX ON destinations USING GIST (geom)")
 
+    # add the id of the nearest network node to the table
+    add_nearest_node("destinations", "destination_id")
+
 
 @cli.command()
 @verbose_opt
@@ -328,38 +277,46 @@ def run_routing(out_csv, db_url, n_processes, verbose, quiet):
         log.info("Creating output origin-destination cost matrix table")
         db.execute(db.queries["create_origin_destination_cost_matrix"])
 
-    # find tiles to process - tiles intersecting origin points
-    tiles = sorted(
-        [
-            t[0]
-            for t in db.query(
-                """
-        SELECT DISTINCT tile_id
-        FROM tiles t
-        INNER JOIN origins o
-        ON ST_Intersects(t.geom, o.geom)
-    """
-            )
-        ]
-    )
-    n = len(tiles)
-    log.info(f"Processing {n} tiles")
+    # find and load distinct origin-destination nodes not already in output
+    query = sql.SQL(Path(Path.cwd() / "sql" / "temp_origin_destination.sql").read_text())
+    conn = db.engine.raw_connection()
+    cur = conn.cursor()
+    cur.execute(query)
+    conn.commit()
 
-    # load query, do this properly with psycopg2 rather than using pgdata
+    # Report on how many we are processing
+    n = db.query("SELECT COUNT(*) FROM temp_origin_destinations").fetchone()[0]
+    log.info(f"Processing {n} origin-destination pairs")
+
+    db = pgdata.connect(multiprocessing=True)
+    conn = db.engine.raw_connection()
+    cur = conn.cursor()
+
     query = sql.SQL(Path(Path.cwd() / "sql" / "routing.sql").read_text())
-
-    # process each tile in parallel
-    func = partial(execute_parallel, query)
-    pool = multiprocessing.Pool(processes=n_processes)
-    # add a progress bar
-    results_iter = pool.imap_unordered(func, tiles)
-    with click.progressbar(results_iter, length=len(tiles)) as bar:
-        for _ in bar:
-            pass
-    pool.close()
-    pool.join()
+    cur.execute("SELECT origin_node_id, destination_node_id FROM temp_origin_destinations")
+    od_pairs = cur.fetchall()
+    results = []
+    for od in od_pairs:
+        cur.execute(query, (od[0], od[1], od[0], od[1]))
+        r = cur.fetchall()
+        results.append(r)
+    for row in results:
+        print(row)
+    #extras.execute_values(cur, "INSERT INTO public.origin_destination_cost_matrix VALUES %s", results, "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
+    # divide our o-d pairs into seperate piles per process/connection
+    #chunks = [i for i in range(1, n_processes + 1)]
+    #func = partial(batched_routing_query, query)
+    #pool = multiprocessing.Pool(processes=n_processes)
+    # add a progress bar, but it won't be very informative
+    #results_iter = pool.imap_unordered(func, chunks)
+    #with click.progressbar(results_iter, length=len(chunks)) as bar:
+    #    for _ in bar:
+    #        pass
+    #pool.close()
+    #pool.join()
 
     # dump to csv
+    """
     log.info(f"Dumping results to file {out_csv}")
     query_text = Path(Path.cwd() / "sql" / "report.sql").read_text()
     query_csv = f"COPY ({query_text}) TO STDOUT WITH CSV HEADER"
@@ -368,6 +325,7 @@ def run_routing(out_csv, db_url, n_processes, verbose, quiet):
     with open(out_csv, "w") as f:
         cur.copy_expert(query_csv, f)
     conn.close()
+    """
 
 
 if __name__ == "__main__":

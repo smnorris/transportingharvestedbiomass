@@ -31,9 +31,59 @@ conda env create -f environment.yml
 conda activate thbenv
 ```
 
-## Processing
+## Network data load
 
-A single script `thb.py` is provided, with a seperate command for each part of the job:
+Edit `load.bat`, modifying paths to transportation feature data (roads/rail/water) and the database connection parameters as required.
+When ready, run `load.bat` to load features to the database, build network from all transportation features, and build the turn restrictions table (modelling a cost of $2 to transfer between transportation modes).
+
+Output network/turn restriction tables are:
+
+```
+                                            Table "public.network_test"
+    Column    |           Type            | Collation | Nullable |                     Default
+--------------+---------------------------+-----------+----------+--------------------------------------------------
+ network_id   | integer                   |           | not null | nextval('network_test_network_id_seq'::regclass)
+ data_source  | character varying(5)      |           |          |
+ rd_surface   | character varying(12)     |           |          |
+ road_class   | character varying(12)     |           |          |
+ awater       | double precision          |           |          |
+ awaterinterp | double precision          |           |          |
+ aboat        | double precision          |           |          |
+ acityspoke   | double precision          |           |          |
+ aloose       | double precision          |           |          |
+ aovergrown   | double precision          |           |          |
+ apaved       | double precision          |           |          |
+ arough       | double precision          |           |          |
+ aseasonal    | double precision          |           |          |
+ aunknown     | double precision          |           |          |
+ arail        | double precision          |           |          |
+ cost         | double precision          |           |          |
+ geom         | geometry(LineString,3005) |           |          |
+ source       | integer                   |           |          |
+ target       | integer                   |           |          |
+Indexes:
+    "network_test_pkey" PRIMARY KEY, btree (network_id)
+    "network_test_geom_idx" gist (geom)
+    "network_test_source_idx" btree (source)
+    "network_test_target_idx" btree (target)
+
+
+                                           Table "public.restrictions"
+     Column     |       Type       | Collation | Nullable |                       Default
+----------------+------------------+-----------+----------+------------------------------------------------------
+ restriction_id | integer          |           | not null | nextval('restrictions_restriction_id_seq'::regclass)
+ to_cost        | double precision |           |          |
+ target_id      | integer          |           |          |
+ via_path       | text             |           |          |
+Indexes:
+    "restrictions_pkey" PRIMARY KEY, btree (restriction_id)
+
+```
+
+
+## Route processing
+
+A single script `thb.py` is provided, with several commands:
 
 ```
 (thbenv) python thb.py --help
@@ -43,7 +93,6 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  create-network     Load road file/layer to db, create network topology.
   create-origins     Create origin point csv from input raster.
   load-destinations  Load destinations csv to postgres and create geometry.
   load-origins       Load origins csv to postgres and create geometry.
@@ -67,31 +116,6 @@ Options:
   -o, --out_csv TEXT         Path to output csv
   -n, --n_processes INTEGER  Maximum number of parallel processes
   --help                     Show this message and exit.
-```
-
-
-
-#### `create-network`
-
-Load the roads layer to the database and create the network with pg_routing.
-For example, with the provided .gdb, having `objectid` as the existing unique id.
-
-    python thb.py create-network data/01_working.gdb Roadnet_only2_1_1splitn_1 objectid
-
-The output table is `network`, with primary key renamed to `network_id`. All other existing fields are retained as is.
-In addtion to an existing unique identifier, the network table must contain these numeric columns (plus the geometries):
-```
- awater
- awaterinterp
- aboat
- acityspoke
- aloose
- aovergrown
- apaved
- arough
- aseasonal
- aunknown
- cost
 ```
 
 #### `create-origins`
