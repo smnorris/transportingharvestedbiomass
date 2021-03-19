@@ -37,7 +37,7 @@ def parse_db_url(db_url):
     return db
 
 
-def batched_routing_query(sql, chunk):
+def batched_routing_query(query, chunk):
     """Execute sql for specified chunk of records using a non-pooled connection
     """
     # specify multiprocessing when creating to disable connection pooling
@@ -52,10 +52,12 @@ def batched_routing_query(sql, chunk):
     od_pairs = cur.fetchall()
     results = []
     for od in od_pairs:
-        results.append(cur.execute(sql, (od[0], od[1])))
-    print(results)
-    cur.close()
-    conn.close()
+        cur.execute(query, (od[0], od[1], od[0], od[1]))
+        r = cur.fetchall()
+        results.append(r)
+
+    # write result to db
+    extras.execute_values(cur, "INSERT INTO public.origin_destination_cost_matrix VALUES %s", results, "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
 
 
 def add_nearest_node(in_table, id):
@@ -268,9 +270,9 @@ def run_routing(out_csv, db_url, n_processes, verbose, quiet):
     db = pgdata.connect(db_url)
 
     # create tiles layer if it does not exist
-    if "public.tiles" not in db.tables:
-        log.info("Creating tiles table for parallelization")
-        db.execute(db.queries["create_tiles"])
+#    if "public.tiles" not in db.tables:
+#        log.info("Creating tiles table for parallelization")
+#        db.execute(db.queries["create_tiles"])
 
     # create output table if it does not exist
     if "public.origin_destination_cost_matrix" not in db.tables:
@@ -281,18 +283,20 @@ def run_routing(out_csv, db_url, n_processes, verbose, quiet):
     query = sql.SQL(Path(Path.cwd() / "sql" / "temp_origin_destination.sql").read_text())
     conn = db.engine.raw_connection()
     cur = conn.cursor()
-    cur.execute(query)
+    cur.execute(query, (n_processes,))
     conn.commit()
 
     # Report on how many we are processing
     n = db.query("SELECT COUNT(*) FROM temp_origin_destinations").fetchone()[0]
     log.info(f"Processing {n} origin-destination pairs")
+    query = sql.SQL(Path(Path.cwd() / "sql" / "routing.sql").read_text())
+
+    """
+    just loop in single process
 
     db = pgdata.connect(multiprocessing=True)
     conn = db.engine.raw_connection()
     cur = conn.cursor()
-
-    query = sql.SQL(Path(Path.cwd() / "sql" / "routing.sql").read_text())
     cur.execute("SELECT origin_node_id, destination_node_id FROM temp_origin_destinations")
     od_pairs = cur.fetchall()
     results = []
@@ -302,18 +306,22 @@ def run_routing(out_csv, db_url, n_processes, verbose, quiet):
         results.append(r)
     for row in results:
         print(row)
-    #extras.execute_values(cur, "INSERT INTO public.origin_destination_cost_matrix VALUES %s", results, "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
+    extras.execute_values(cur, "INSERT INTO public.origin_destination_cost_matrix VALUES %s", results, "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
+    """
+
+    # in n parallel processes
+
     # divide our o-d pairs into seperate piles per process/connection
-    #chunks = [i for i in range(1, n_processes + 1)]
-    #func = partial(batched_routing_query, query)
-    #pool = multiprocessing.Pool(processes=n_processes)
-    # add a progress bar, but it won't be very informative
-    #results_iter = pool.imap_unordered(func, chunks)
-    #with click.progressbar(results_iter, length=len(chunks)) as bar:
-    #    for _ in bar:
-    #        pass
-    #pool.close()
-    #pool.join()
+    chunks = [i for i in range(1, n_processes + 1)]
+    func = partial(batched_routing_query, query)
+    pool = multiprocessing.Pool(processes=n_processes)
+    # add a progress bar
+    results_iter = pool.imap_unordered(func, chunks)
+    with click.progressbar(results_iter, length=len(chunks)) as bar:
+        for _ in bar:
+            pass
+    pool.close()
+    pool.join()
 
     # dump to csv
     """

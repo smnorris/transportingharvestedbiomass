@@ -29,7 +29,7 @@ not_already_computed AS
 
 SELECT
   row_number() over() as id,
-  ntile(8) over() as chunk,
+  ntile(%s) over() as chunk,
   origin_node_id,
   destination_node_id
 FROM not_already_computed;

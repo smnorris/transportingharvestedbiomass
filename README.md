@@ -188,13 +188,3 @@ For the provided data, data assoicated with all origins (sum of pixels, biomass)
 
 ### Comparisons of cost/distance matrix outputs
 
-Because the networks are not identical (no rail or water in the version used in postgis), not all records are comparable.
-However, we can compare all output routes that did not include rail/water in the arc analysis:
-
-- 253 rows have a different output destination rank (of 1), mostly when comparing McMahon Gas Plant with Kamloops or Quesnel.
-- the average total cost difference between the two methods is $.00867
-- the average total distance difference between the two methods is 125m
-
-Some of the difference can likely be attributed to the shift in centroid locations, but it is difficult to determine what other sources may contribute to these differences.
-
-See the [summary csv](qa/output_comparison.csv) to review the exact differences in the sample data (for routes that did not include rail/water in the ArcGIS version)
