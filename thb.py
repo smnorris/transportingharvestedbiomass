@@ -1,4 +1,3 @@
-import subprocess
 import csv
 import logging
 import sys
@@ -52,12 +51,11 @@ def batched_routing_query(query, chunk):
     od_pairs = cur.fetchall()
     results = []
     for od in od_pairs:
+        print(od[0], od[1])
         cur.execute(query, (od[0], od[1], od[0], od[1]))
         r = cur.fetchall()
         results.append(r)
-
-    # write result to db
-    extras.execute_values(cur, "INSERT INTO public.origin_destination_cost_matrix VALUES %s", results, "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
+    return results
 
 
 def add_nearest_node(in_table, id):
@@ -322,6 +320,11 @@ def run_routing(out_csv, db_url, n_processes, verbose, quiet):
             pass
     pool.close()
     pool.join()
+
+    results_iter.join()
+
+    # write result to db
+    extras.execute_values(cur, "INSERT INTO public.origin_destination_cost_matrix VALUES %s", results_iter, "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
 
     # dump to csv
     """
